@@ -86,6 +86,8 @@ docs/architecture.md  подробное описание архитектуры
 
 API: `GET /health`, `GET /api/summary`, `GET /api/priorities`, `GET /api/nodes/{gid}`, `GET /api/nodes/{gid}/graph`, `GET /api/clusters`, `GET /api/clusters/{cluster_id}`, `POST /api/investigator`. Все операции анализа работают на чтение; POST не изменяет исходные данные.
 
+Подробная документация: [архитектура](docs/architecture.md) · [локализация интерфейса и AI](docs/frontend-localization.md).
+
 ## Установка и запуск
 
 Нужны Python, Node.js с npm и Git для получения репозитория. Локальная проверка анализа выполнена на Python 3.14.3; установленная версия Node.js — 24.21.0. Команды ниже выполняются **из корня репозитория**, где находятся `backend/`, `frontend/` и `data/`. Данные уже включены в репозиторий. Интернет нужен для установки зависимостей и опциональных запросов к OpenAI.

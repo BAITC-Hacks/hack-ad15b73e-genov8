@@ -86,6 +86,8 @@ docs/architecture.md  архитектураның толық сипаттама
 
 API: `GET /health`, `GET /api/summary`, `GET /api/priorities`, `GET /api/nodes/{gid}`, `GET /api/nodes/{gid}/graph`, `GET /api/clusters`, `GET /api/clusters/{cluster_id}`, `POST /api/investigator`. Талдау операциялары тек оқуға арналған; POST бастапқы деректерді өзгертпейді.
 
+Толық құжаттама: [архитектура](docs/architecture.kk.md) · [интерфейс пен AI тілдерін баптау](docs/frontend-localization.kk.md).
+
 ## Орнату және іске қосу
 
 Python, npm бар Node.js және репозиторийді алу үшін Git қажет. Жергілікті талдау Python 3.14.3 нұсқасында тексерілді; орнатылған Node.js нұсқасы — 24.21.0. Командаларды `backend/`, `frontend/` және `data/` орналасқан **репозиторийдің түбірлік бумасынан** орындаңыз. Деректер репозиторийге қосылған. Интернет тәуелділіктерді орнату және қосымша OpenAI сұраулары үшін қажет.

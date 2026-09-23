@@ -1,72 +1,76 @@
-# MoneyGraph architecture
+# Архитектура MoneyGraph
 
-MoneyGraph separates deterministic analysis from presentation and optional language-model assistance. There is no database: the generated CSV snapshot and organizer parquet files are loaded into a cached, read-only FastAPI repository.
+**Русский** · [Қазақша](architecture.kk.md) · [English](architecture.en.md)
+
+MoneyGraph отделяет детерминированный анализ от интерфейса и опциональной помощи языковой модели. Базы данных нет: сформированный снимок CSV и Parquet-файлы организатора загружаются в кешированный репозиторий FastAPI, доступный только для чтения.
 
 ```mermaid
 flowchart LR
-    P[Organizer parquet<br/>nodes · edges · transactions]
-    D[Deterministic graph engine<br/>ingest · validate · features]
-    A[Explainable analysis<br/>roles · clustering · ranking · evidence]
-    C[CSV findings<br/>nodes_roles · clusters · top_nodes]
-    R[Cached FastAPI repository<br/>read-only API]
-    U[Next.js investigation workspace<br/>queue · search · ego graph · evidence]
-    I[Optional OpenAI investigator<br/>bounded Responses API loop]
-    T[Read-only graph tools<br/>node · receivers · paths · filter · cluster · removal]
-    G[Grounded response<br/>hypotheses and cited GIDs]
+    P[Parquet организатора<br/>узлы · связи · транзакции]
+    D[Детерминированный графовый движок<br/>загрузка · проверка · признаки]
+    A[Объяснимый анализ<br/>роли · кластеры · рейтинг · обоснования]
+    C[Результаты CSV<br/>nodes_roles · clusters · top_nodes]
+    R[Кешированный репозиторий FastAPI<br/>API только для чтения]
+    U[Рабочее место Next.js<br/>очередь · поиск · граф окружения · обоснования]
+    I[Опциональный OpenAI-помощник<br/>ограниченный цикл Responses API]
+    T[Инструменты чтения графа<br/>узел · получатели · пути · фильтр · кластер · удаление]
+    G[Ответ на основе данных<br/>гипотезы и ссылки на GID]
 
     P --> D --> A --> C --> R --> U
-    U -->|optional question| I
-    I -->|maximum 5 tool calls| T
-    T -->|facts from cached data| R
+    U -->|необязательный вопрос| I
+    I -->|максимум 5 вызовов инструментов| T
+    T -->|факты из кешированных данных| R
     T --> G --> U
 ```
 
-## Layer responsibilities
+## Ответственность компонентов
 
-### Organizer inputs
+### Входные данные организатора
 
-`data/nodes.parquet`, `data/edges.parquet`, and `data/transactions.parquet` contain the supplied graph snapshot. `starter/starter.py` supplies the organizer's parquet loader and directed graph builder, which the analysis pipeline reuses.
+`data/nodes.parquet`, `data/edges.parquet` и `data/transactions.parquet` содержат предоставленный снимок графа. Аналитический pipeline повторно использует загрузчик Parquet и построитель направленного графа организатора из `starter/starter.py`.
 
-The extract is observationally bounded. Outgoing traversal ends after depth 3, making depth 4 a downstream boundary. Seed incoming flow is incomplete, only supplied intra-bank outgoing traversal is visible, and transfers below 5,000 KZT are absent.
+Выгрузка имеет границы наблюдения. Исходящий обход заканчивается после глубины 3, поэтому глубина 4 — граница дальнейших наблюдений. Входящие потоки seed неполны; видны только предоставленные внутрибанковские связи по исходящему обходу; переводы меньше 5 000 KZT отсутствуют.
 
-### Deterministic graph engine
+### Детерминированный графовый движок
 
-`backend/app/analysis/features.py` validates cross-file integrity and builds the directed weighted graph. It computes structural, monetary, transaction, temporal, seed-connectivity, and observability features. Direction is retained throughout these calculations.
+`backend/app/analysis/features.py` проверяет согласованность файлов и строит направленный взвешенный граф. Он рассчитывает структурные, денежные, транзакционные и временные признаки, связность с seed и признаки полноты наблюдения. Направления сохраняются во всех этих расчётах.
 
-Temporal forwarding uses the latest observed prior receipt and a configured 0–2 day window. Dates have daily resolution, so it does not infer ordering within a day or identity of funds.
+Для оценки быстрого перенаправления используется последнее наблюдаемое поступление перед переводом и настроенное окно 0–2 дня. Даты имеют точность до дня: порядок операций внутри дня и принадлежность средств не выводятся.
 
-### Explainable analysis
+### Объяснимый анализ
 
-`roles.py` assigns exactly one precedence-ordered role using the thresholds in `config/thresholds.yaml`. Depth-4 nodes cannot become terminals from a zero observed out-degree; they receive the peripheral fallback and a boundary caveat. Seed rules avoid incomplete incoming-flow measures.
+`roles.py` назначает ровно одну роль в порядке приоритета правил с порогами из `config/thresholds.yaml`. Узлы глубины 4 не становятся конечными получателями из-за нулевого наблюдаемого числа исходящих связей: они получают роль `peripheral` и предупреждение о границе наблюдения. Правила для seed не используют неполные показатели входящего потока.
 
-`clustering.py` uses deterministic weighted Louvain communities with resolution 1.0 and seed 42. It uses an undirected projection only for community detection and sums reciprocal values; directed data remains authoritative everywhere else.
+`clustering.py` выделяет взвешенные сообщества Louvain с параметрами resolution 1.0 и seed 42. Неориентированная проекция используется только для поиска сообществ; суммы встречных переводов складываются. В остальных расчётах источником истины остаются направленные данные.
 
-`ranking.py` combines role strength, money significance, structural importance, seed connectivity, and anomaly evidence using documented weights that sum to 1. `evidence.py` turns observed metrics into cautious, numeric explanations under 200 characters.
+`ranking.py` объединяет силу роли, денежную значимость, структурную важность, связь с seed и признаки аномалий с документированными весами, сумма которых равна 1. `evidence.py` преобразует наблюдаемые показатели в осторожные числовые объяснения длиной менее 200 символов.
 
-### CSV findings
+### Результаты CSV
 
-`backend/pipeline.py` validates and atomically writes:
+`backend/pipeline.py` проверяет результаты и атомарно заменяет каждый CSV-файл:
 
 - `output/nodes_roles.csv`
 - `output/clusters.csv`
 - `output/top_nodes.csv`
 
-The CSVs are the deterministic finding snapshot. The pipeline validates row counts, schemas, completeness, allowed roles, score bounds, cluster coverage, evidence length, and ranking order.
+CSV содержат снимок результатов детерминированного анализа. Pipeline проверяет число строк, схемы, полноту, допустимые роли, диапазоны оценок, покрытие кластеров, длину обоснований и порядок рейтинга.
 
-### Cached FastAPI repository
+### Кешированный репозиторий FastAPI
 
-FastAPI loads and validates the parquet inputs, thresholds, and CSV findings once at startup or through its cached repository. It does not recompute expensive graph metrics per request. It exposes summary, priorities, node cards, bounded directed ego graphs, clusters, and the optional investigator endpoint using explicit response models. GIDs remain strings at the API boundary to preserve int64 precision.
+FastAPI загружает и проверяет Parquet, пороги и CSV при запуске или через кешированный репозиторий. Дорогие графовые показатели не пересчитываются для каждого запроса. API с явными моделями ответов предоставляет сводку, приоритеты, карточки узлов, ограниченные направленные графы окружения, кластеры и опциональный endpoint помощника. GID передаются строками для сохранения точности int64.
 
-The API is read-only and has no database, authentication system, or customer master data.
+API работает только на чтение. Базы данных, системы авторизации и справочника идентификационных данных клиентов нет.
 
-### Next.js investigation workspace
+### Рабочее место Next.js
 
-The single-page TypeScript workspace shows the investigation queue, exact-GID search, a bounded Cytoscape.js money graph, role and ranking evidence, observability warnings, and cluster context. Edge direction and observed volume remain visible. The UI requests small ego networks rather than the full 2,248-node graph.
+Одностраничный интерфейс на TypeScript показывает очередь проверок, поиск по точному GID, ограниченный денежный граф Cytoscape.js, обоснования ролей и рейтинга, предупреждения о неполноте наблюдения и контекст кластера. Направления связей и наблюдаемые объёмы остаются видимыми. Интерфейс запрашивает небольшие графы окружения, а не весь граф из 2 248 узлов.
 
-### Optional OpenAI investigator
+### Опциональный OpenAI-помощник
 
-The backend-only investigator uses the OpenAI Responses API. Its loop is capped at five tool calls per request and can call only six bounded, read-only graph tools: `node_card`, `common_receivers`, `paths`, `filter_nodes`, `cluster_summary`, and `what_if_remove`.
+Серверный помощник использует OpenAI Responses API. Цикл ограничен пятью вызовами инструментов на запрос. Доступны только шесть ограниченных инструментов чтения графа: `node_card`, `common_receivers`, `paths`, `filter_nodes`, `cluster_summary` и `what_if_remove`.
 
-The tools query the cached deterministic data and return the facts used in the answer. The model does not assign deterministic roles, clusters, evidence, or scores, and it cannot create observed edges or external customer attributes. Referenced GIDs are validated against tool results. Depth-4 and seed-inflow limitations are preserved, and conclusions remain investigation hypotheses for human review.
+Инструменты обращаются к кешированным детерминированным данным и возвращают факты для ответа. Модель не назначает роли, кластеры, обоснования или оценки и не может создавать наблюдаемые связи или внешние атрибуты клиентов. Упомянутые GID сверяются с результатами инструментов. Ограничения глубины 4 и неполного входящего потока seed сохраняются, а выводы остаются гипотезами для проверки человеком.
 
-`OPENAI_API_KEY` is optional, loaded only by the backend, and never included in browser configuration. Without it, the mandatory deterministic pipeline, API, and workspace continue to operate.
+`OPENAI_API_KEY` необязателен, загружается только backend и никогда не включается в настройки браузера. Без него основной pipeline, API и интерфейс продолжают работать.
+
+[MoneyGraph README](../README.md)

@@ -86,6 +86,8 @@ docs/architecture.md  detailed architecture
 
 API: `GET /health`, `GET /api/summary`, `GET /api/priorities`, `GET /api/nodes/{gid}`, `GET /api/nodes/{gid}/graph`, `GET /api/clusters`, `GET /api/clusters/{cluster_id}`, `POST /api/investigator`. Analysis operations are read-only; POST does not modify source data.
 
+Detailed documentation: [architecture](docs/architecture.en.md) · [interface and AI localization](docs/frontend-localization.en.md).
+
 ## Installation and startup
 
 You need Python, Node.js with npm, and Git to obtain the repository. Local analysis was verified with Python 3.14.3; the installed Node.js version is 24.21.0. Run the commands **from the repository root**, containing `backend/`, `frontend/`, and `data/`. Input data is included. Internet access is needed to install dependencies and optionally call OpenAI.

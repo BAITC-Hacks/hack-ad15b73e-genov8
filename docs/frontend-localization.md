@@ -1,5 +1,7 @@
 # Локализация интерфейса
 
+**Русский** · [Қазақша](frontend-localization.kk.md) · [English](frontend-localization.en.md)
+
 Интерфейс поддерживает русский (по умолчанию), казахский и английский языки.
 Переключатель «Русский / Қазақша / English» находится в верхней панели.
 Выбор сохраняется в localStorage под ключом moneygraph.locale; при недоступном
@@ -57,3 +59,5 @@ Backend добавляет языковую инструкцию к общим �
 
 Языковая политика использует параметр instructions Responses API:
 https://developers.openai.com/api/docs/guides/text
+
+[MoneyGraph README](../README.md)
