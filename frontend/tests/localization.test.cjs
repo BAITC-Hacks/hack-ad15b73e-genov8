@@ -29,6 +29,18 @@ test("English counts and evidence keep their original meaning", () => {
   for (const [source] of evidenceTemplates) assert.equal(translateEvidence("en", source), source);
 });
 
+test("Investigator suggestions are localized and preserve the exact selected GID", () => {
+  const gid = "100000004156082100";
+  for (const key of ["Why is GID {gid} high priority?", "What would happen if we removed GID {gid}?"]) {
+    for (const locale of ["en", "ru", "kk"]) {
+      const prompt = translate(locale, key).replace("{gid}", gid);
+      assert.ok(prompt.includes(gid));
+      assert.ok(!prompt.includes("{gid}"));
+      if (locale !== "en") assert.notEqual(translate(locale, key), key);
+    }
+  }
+});
+
 test("Every known backend template translates without dropping numeric evidence", () => {
   for (const [source] of evidenceTemplates) {
     const input = source.replace(/\{(\d+)\}/g, (_, index) => String(800 + Number(index)));

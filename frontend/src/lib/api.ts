@@ -1,3 +1,5 @@
+import type { Locale } from "./translations";
+
 export type Role =
   | "coordinator"
   | "distributor"
@@ -195,7 +197,7 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function investigate(question: string): Promise<InvestigatorResponse> {
+async function investigate(question: string, locale: Locale, selectedGid: string | null, signal?: AbortSignal): Promise<InvestigatorResponse> {
   const response = await fetch(`${API_BASE_URL}/api/investigator`, {
     method: "POST",
     cache: "no-store",
@@ -203,7 +205,8 @@ async function investigate(question: string): Promise<InvestigatorResponse> {
       Accept: "application/json",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, locale, selected_gid: selectedGid }),
+    signal,
   });
   const body = (await response.json()) as InvestigatorResponse | { detail?: string };
   if (response.status === 503 && "status" in body && body.status === "unavailable") {

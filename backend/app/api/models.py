@@ -155,6 +155,8 @@ class ClusterDetailResponse(ClusterSummary):
 
 class InvestigatorRequest(BaseModel):
     question: str = Field(min_length=3, max_length=1000)
+    locale: Literal["en", "ru", "kk"] = "en"
+    selected_gid: Optional[str] = Field(default=None, pattern=r"^\d+$", max_length=32)
 
 
 class ToolCallRecord(BaseModel):

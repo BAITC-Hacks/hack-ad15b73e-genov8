@@ -5,6 +5,7 @@ import re
 from typing import Any, Dict, List, Optional, Set
 
 from backend.app.agent.tools import ALLOWED_ROLES, MoneyGraphTools
+from backend.app.agent.localization import CONTEXT, Locale, language_instructions, message
 from backend.app.api.models import InvestigatorResponse, ToolCallRecord
 from backend.app.api.repository import MoneyGraphRepository
 
@@ -167,16 +168,15 @@ class MoneyGraphInvestigator:
         return [item for item in response.output if getattr(item, "type", None) == "function_call"]
 
     @staticmethod
-    def _validate_answer_gids(answer: str, grounded_gids: Set[str]) -> str:
+    def _validate_answer_gids(answer: str, grounded_gids: Set[str], locale: Locale = "en") -> str:
         mentioned = set(re.findall(r"\b\d{18}\b", answer))
         if mentioned <= grounded_gids:
             return answer
-        return (
-            "The model response referenced an identifier that was not returned by a MoneyGraph tool, "
-            "so the narrative was withheld. Review the factual tool activity and try a narrower question."
-        )
+        return message("ungrounded", locale)
 
-    def ask(self, question: str) -> InvestigatorResponse:
+    def ask(self, question: str, locale: Locale = "en", selected_gid: Optional[str] = None) -> InvestigatorResponse:
+        if selected_gid:
+            question += "\n\n" + CONTEXT[locale].format(gid=selected_gid)
         input_items: List[Any] = [{"role": "user", "content": question}]
         tool_records: List[ToolCallRecord] = []
         grounded_gids: Set[str] = set()
@@ -184,7 +184,7 @@ class MoneyGraphInvestigator:
 
         request_options = {
             "model": self.model,
-            "instructions": SYSTEM_INSTRUCTIONS,
+            "instructions": SYSTEM_INSTRUCTIONS + "\n\n" + language_instructions(locale),
             "tools": TOOL_DEFINITIONS,
             "parallel_tool_calls": False,
             "store": False,
@@ -201,8 +201,8 @@ class MoneyGraphInvestigator:
                 if not calls:
                     answer = (response.output_text or "").strip()
                     if not answer:
-                        answer = "No grounded investigation narrative was returned. Review the tool activity."
-                    answer = self._validate_answer_gids(answer, grounded_gids)
+                        answer = message("empty", locale)
+                    answer = self._validate_answer_gids(answer, grounded_gids, locale)
                     return InvestigatorResponse(
                         status="ok",
                         answer=answer,
@@ -260,4 +260,4 @@ class MoneyGraphInvestigator:
         except InvestigatorError:
             raise
         except Exception as exc:
-            raise InvestigatorError("The AI investigator could not complete this request.") from exc
+            raise InvestigatorError(message("failed", locale)) from exc
