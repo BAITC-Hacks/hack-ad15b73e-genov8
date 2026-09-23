@@ -1,0 +1,42 @@
+# MoneyGraph role thresholds
+#
+# Placeholder configuration for explainable, deterministic role assignment.
+# Numeric thresholds remain null until they are derived from the real parquet
+# dataset and documented with the final methodology.
+
+coordinator:
+  min_controlled_counterparties: null
+  min_coordinated_flow_volume: null
+  max_allowed_observed_depth: null
+
+distributor:
+  min_outgoing_counterparties: null
+  min_outgoing_volume_share: null
+  max_incoming_concentration: null
+
+consolidator:
+  min_incoming_counterparties: null
+  min_incoming_volume_share: null
+  max_outgoing_concentration: null
+
+transit:
+  min_incoming_counterparties: null
+  min_outgoing_counterparties: null
+  min_pass_through_volume_share: null
+  max_holding_time: null
+
+terminal:
+  min_incoming_volume: null
+  max_outgoing_volume_share: null
+  max_downstream_counterparties: null
+
+peripheral:
+  max_total_degree: null
+  max_transaction_volume: null
+  max_cluster_centrality: null
+
+observability:
+  # Data is observable through depth 3; depth 4 is the boundary for inferred
+  # downstream context and should not be treated as fully observed evidence.
+  max_observed_depth: 3
+  depth_4_boundary_handling: null
