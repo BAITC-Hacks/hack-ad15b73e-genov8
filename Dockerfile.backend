@@ -1,0 +1,24 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+COPY backend/requirements.txt backend/requirements.txt
+RUN python -m pip install --no-cache-dir -r backend/requirements.txt
+
+RUN useradd --create-home --shell /usr/sbin/nologin moneygraph
+
+COPY --chown=moneygraph:moneygraph backend/ backend/
+COPY --chown=moneygraph:moneygraph starter/starter.py starter/starter.py
+COPY --chown=moneygraph:moneygraph config/ config/
+COPY --chown=moneygraph:moneygraph data/ data/
+COPY --chown=moneygraph:moneygraph output/ output/
+
+USER moneygraph
+
+EXPOSE 8000
+
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
