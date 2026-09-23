@@ -42,3 +42,17 @@ distributor decisions use observed outgoing structure and centrality only.
 Transaction dates have daily resolution. The temporal feature measures outgoing
 value on the same day or within two days after the latest observed incoming
 date; it does not infer ordering within a day or prove fund identity.
+
+## Milestone 3A API
+
+FastAPI loads the parquet inputs and generated CSV results once when the process
+starts. It reuses the shared feature functions to provide explanatory metrics
+and verifies that recomputed roles and scores match the CSV snapshot. Requests
+do not recompute graph metrics.
+
+The API is read-only and has no database. Summary, priority, node and cluster
+responses use explicit Pydantic models. Node graph responses contain a bounded,
+directed neighborhood selected by observed connection value. GIDs are returned
+as strings to preserve their full int64 values in browser clients.
+
+Local CORS access is allowed for the Next.js development origins on port 3000.

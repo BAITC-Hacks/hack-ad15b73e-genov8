@@ -1,13 +1,12 @@
 # HackAlem MoneyGraph
 
-This repository contains the HackAlem MoneyGraph solution. Milestone 2 provides
-a deterministic batch pipeline that reads the organizer parquet files, computes
-node features, assigns explainable roles, detects graph communities, ranks nodes,
-and writes the three required CSV files.
+This repository contains the HackAlem MoneyGraph solution. The deterministic
+batch pipeline reads the organizer parquet files, computes explainable findings,
+and writes the three required CSV files. A read-only FastAPI service exposes the
+generated investigation results to the frontend.
 
-The frontend and FastAPI scaffold remain unchanged. API endpoints, an AI
-assistant, persistence, deployment, and interactive visualization are future
-milestones.
+The frontend remains a scaffold. An AI assistant, persistence, deployment, and
+interactive visualization are future milestones.
 
 ## Analysis pipeline
 
@@ -33,9 +32,23 @@ Role thresholds, clustering parameters and ranking weights are documented in
 `config/thresholds.yaml`. The rules treat seed inflow as incomplete and treat
 depth 4 as an unobserved downstream boundary.
 
+## Read-only API
+
+Start the API after `make analyze` has generated the CSV outputs:
+
+```sh
+make backend
+```
+
+The OpenAPI documentation is available at `http://127.0.0.1:8000/docs`. The
+service provides `/health`, `/api/summary`, `/api/priorities`, node detail and
+ego-graph routes, and cluster list/detail routes. GIDs are serialized as strings
+so their int64 values remain exact in JavaScript clients.
+
 ## Structure
 
 - `backend/app/analysis/` contains feature, role, clustering, ranking and evidence logic.
+- `backend/app/api/` contains the cached read-only API repository, models and routes.
 - `backend/pipeline.py` runs and validates the complete batch pipeline.
 - `frontend/` contains the minimal Next.js TypeScript scaffold.
 - `config/thresholds.yaml` records the explainable analysis settings.

@@ -1,1 +1,5 @@
-"""FastAPI route package."""
+"""Read-only MoneyGraph API package."""
+
+from backend.app.api.routes import router
+
+__all__ = ["router"]
