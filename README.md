@@ -1,190 +1,221 @@
-# MoneyGraph
+# MoneyGraph — граф денег
 
-MoneyGraph is an explainable anti-money-laundering investigation prototype built for HackAlem. It helps an AML or financial monitoring analyst answer one question:
+**Русский** · [Қазақша](README.kk.md) · [English](README.en.md)
 
-> **Which of these 2,248 clients should be reviewed first, and why?**
+Объяснимый анализ денежных переводов для HackAlem. MoneyGraph помогает аналитикам финансового мониторинга и AML определить, **кого проверить в первую очередь и какие наблюдаемые связи обосновывают эту проверку**.
 
-The system ingests the organizer's parquet files, computes deterministic graph and transaction features, assigns one explainable role to every client, groups the graph into communities, and ranks investigation hypotheses. It exports the required CSV findings, serves them through a read-only FastAPI API, and presents them in a desktop-first Next.js investigation workspace.
+Вместо ручного просмотра тысяч переводов аналитик получает приоритетную очередь клиентов, роли в графе, группы связанных участников и числовые объяснения. Результат — гипотезы для расследования, а не заключение о виновности.
 
-An optional OpenAI investigator can answer natural-language questions by calling bounded, read-only graph tools. AI does not assign roles, scores, clusters, or evidence. Tool results from the deterministic engine remain the source of truth.
+## Что реализовано
 
-## How it works
+- Загрузка и проверка трёх Parquet-файлов: клиенты, агрегированные связи и транзакции.
+- Построение ориентированного денежного графа; расчёт оборотов, связей, удержания средств, быстрого перенаправления, PageRank, betweenness и связности с исходными клиентами (`seed`).
+- Объяснимая роль для каждого клиента, сообщества Louvain и рейтинг приоритета проверки.
+- Три CSV-результата: роли всех клиентов, сводка кластеров и топ-20.
+- Веб-интерфейс: очередь приоритетов, поиск по точному GID, интерактивный граф окружения, переход по соседним узлам, карточка с объяснениями и контекст кластера.
+- Предупреждения о границе обхода графа и неполных входящих потоках исходных клиентов.
+- Опциональный AI-помощник: вопросы к графу на естественном языке, инструменты анализа и журнал их вызовов.
+- Переключение интерфейса между русским, казахским и английским. Примеры вопросов и инструкции AI учитывают выбранный язык; помощник получает указание отвечать на нём.
 
-```text
-parquet inputs
-  -> validated directed money graph and deterministic features
-  -> threshold-based roles, Louvain clusters, priority scores, evidence
-  -> required CSV findings
-  -> cached read-only FastAPI repository
-  -> Next.js investigation workspace
-  -> optional OpenAI investigator using grounded graph tools
+### Роли и приоритет
+
+Правила применяются в порядке таблицы: первое подходящее определяет роль. Точные пороги находятся в [config/thresholds.yaml](config/thresholds.yaml), реализация — в [backend/app/analysis](backend/app/analysis).
+
+| Роль | Основной сигнал |
+|---|---|
+| `coordinator` — координатор | Для не-seed: есть входящие и исходящие связи, не менее 3 отправителей и 3 получателей либо степень ≥ 8 и структурный балл ≥ 0,90. Для seed: не менее 8 получателей и структурный балл ≥ 0,90. |
+| `distributor` — распределитель | Не менее 5 уникальных получателей при наблюдаемом исходящем потоке. |
+| `consolidator` — консолидатор | Для не-seed: не менее 3 отправителей, не более 2 получателей, входящий объём ≥ 100 000 KZT. |
+| `transit` — транзит | Для не-seed с входящими и исходящими связями: отношение исходящего к входящему объёму 0,50–1,50; доля быстрого перенаправления ≥ 0,50 в окне 0–2 дня. |
+| `terminal` — удержание средств | Для не-seed вне границы наблюдения: входящий и удержанный объём ≥ 100 000 KZT, удержанная доля ≥ 0,80, не более 1 получателя. |
+| `peripheral` — периферийный | Остальные узлы; все узлы глубины 4 получают эту роль с предупреждением о границе наблюдения. |
+
+Рейтинг `priority_score` — сумма пяти компонентов: сила роли **25%**, денежная значимость **27%**, структурная важность **15%**, связь с seed **17%**, признаки аномального поведения **16%**. Структурная важность объединяет процентильные оценки PageRank, betweenness и степени узла. Аномальные признаки учитывают быстрое перенаправление, дисбаланс потоков и количество транзакций.
+
+`role_score` и `priority_score` лежат в диапазоне 0–1 и **не являются вероятностями нарушения закона**. Краткое `evidence` содержит наблюдаемые показатели и занимает менее 200 символов.
+
+## Как работает решение
+
+1. Организатор предоставляет обезличенные Parquet-файлы с GID клиентов и переводами.
+2. Аналитический pipeline проверяет согласованность файлов, рассчитывает признаки, роли, кластеры и приоритеты, сохраняет CSV.
+3. Backend загружает данные и результаты, проверяет их согласованность с текущими правилами и предоставляет API.
+4. Аналитик выбирает клиента из очереди и изучает причины приоритета, направления переводов, соседей и кластер. Поиск по GID позволяет открыть клиента вне топ-20.
+5. При настроенном OpenAI аналитик задаёт уточняющий вопрос; помощник обращается к инструментам графа и возвращает объяснение. Решение о дальнейшей проверке принимает человек.
+
+## Технологии
+
+| Слой | Используется |
+|---|---|
+| Анализ | Python, pandas, NumPy, PyArrow, NetworkX, SciPy, PyYAML |
+| Backend | FastAPI, Uvicorn, Pydantic, python-dotenv |
+| Frontend | TypeScript, Next.js 15, React 19, Cytoscape.js |
+| Данные | Parquet на входе, CSV на выходе; репозиторий данных в памяти процесса |
+| Опциональный AI | Python SDK OpenAI, Responses API; модель по умолчанию `gpt-4.1-mini`, замена через `OPENAI_MODEL` |
+
+Роли, кластеры и рейтинги рассчитываются алгоритмами и правилами, без LLM. Собственная обученная ML-модель не используется. Зависимости: [backend/requirements.txt](backend/requirements.txt) и [frontend/package.json](frontend/package.json); для frontend сохранён lockfile.
+
+## Архитектура проекта
+
+```mermaid
+flowchart LR
+    D[Parquet: клиенты и переводы] --> P[Python pipeline: проверка и анализ]
+    Y[thresholds.yaml: правила и веса] --> P
+    P --> C[CSV: роли, кластеры, топ-20]
+    D --> B[FastAPI: данные в памяти]
+    C --> B
+    B --> F[Next.js: рабочее место аналитика]
+    F -->|вопрос| A[Опциональный OpenAI-помощник]
+    A -->|инструменты чтения графа| B
+    A -->|ответ и журнал инструментов| F
 ```
 
-The pipeline reuses the organizer loader and graph builder in `starter/starter.py`. It validates node and edge consistency, aggregate amounts, transaction counts, and traversal depth before analysis.
+Backend выполняет дорогие расчёты для проверки результатов при старте, затем обслуживает запросы из кешированного репозитория. В браузер передаётся ограниченное окружение выбранного узла, а не весь граф. GID передаются строками, чтобы JavaScript не терял точность длинных идентификаторов.
 
-For each node it computes observed incoming and outgoing degree, unique senders and recipients, KZT totals, transaction counts, pass-through and retained-flow measures, short-window forwarding behavior, weighted PageRank, weighted betweenness, combined structural strength, and seed connectivity. All calculations are deterministic.
+```text
+backend/pipeline.py     запуск анализа и проверка CSV
+backend/app/analysis/  признаки, роли, кластеры, рейтинг, объяснения
+backend/app/api/       репозиторий данных, схемы и HTTP-маршруты
+backend/app/agent/     AI-помощник и инструменты графа
+frontend/             интерфейс Next.js
+config/thresholds.yaml правила и веса
+data/                 исходные Parquet-файлы
+output/               CSV-результаты
+starter/starter.py    загрузчик и построитель графа организатора
+docs/architecture.md  подробное описание архитектуры
+```
 
-Communities use NetworkX Louvain detection with resolution `1.0` and random seed `42`. Louvain runs on an undirected weighted projection, with reciprocal transfer values summed; direction is retained for features, roles, evidence, path tools, and the UI graph.
+API: `GET /health`, `GET /api/summary`, `GET /api/priorities`, `GET /api/nodes/{gid}`, `GET /api/nodes/{gid}/graph`, `GET /api/clusters`, `GET /api/clusters/{cluster_id}`, `POST /api/investigator`. Все операции анализа работают на чтение; POST не изменяет исходные данные.
 
-## Explainable roles
+## Установка и запуск
 
-Roles are evaluated in this fixed order: **coordinator, distributor, consolidator, transit, terminal, peripheral**. Once a rule matches, later rules are not considered. The values below come directly from `config/thresholds.yaml`.
+Нужны Python, Node.js с npm и Git для получения репозитория. Локальная проверка анализа выполнена на Python 3.14.3; установленная версия Node.js — 24.21.0. Команды ниже выполняются **из корня репозитория**, где находятся `backend/`, `frontend/` и `data/`. Данные уже включены в репозиторий. Интернет нужен для установки зависимостей и опциональных запросов к OpenAI.
 
-| Role | Plain-language interpretation | Implemented rule | Limitation |
-|---|---|---|---|
-| **Coordinator** | A strongly connected node that may organize or bridge several flows. | For an observed non-seed with both incoming and outgoing links: either at least `3` senders and `3` recipients, or total degree at least `8` with structural score at least `0.90`. A seed instead requires at least `8` recipients and structural score at least `0.90`. | This is a structural investigation signal. Seed inflow is incomplete, so seed classification uses outgoing structure and centrality only. |
-| **Distributor** | A node sending observed funds to many recipients. | Among nodes not already classified, outgoing behavior must be observable and unique recipients must be at least `5`. | Only observed in-bank recipients are counted; missing downstream or external transfers can change the picture. |
-| **Consolidator** | A node receiving from several senders while sending to few recipients. | Among remaining observed non-seeds: at least `3` senders, at most `2` recipients, and at least `100,000 KZT` observed incoming. | It excludes seeds because their incoming flow is incomplete. It indicates signs of consolidation, not ownership or intent. |
-| **Transit** | A node with observed onward movement close to its incoming flow and fast forwarding. | Among remaining observed non-seeds with incoming and outgoing links: pass-through ratio from `0.50` to `1.50`, and at least `0.50` of outgoing value sent on the same day or within `2` days of the latest prior observed receipt. | Dates have daily resolution, so same-day ordering and identity of funds cannot be proven. |
-| **Terminal** | A node where a meaningful share of observed incoming funds appears retained. | Among remaining observed non-seeds: at least `100,000 KZT` incoming, at least `100,000 KZT` retained, retained share at least `0.80`, and at most `1` recipient. | Applied only where outgoing behavior is observable. It is a terminal-behavior hypothesis, not proof that funds finally stopped there. |
-| **Peripheral** | No higher-information role rule matched in the observed graph. | Deterministic fallback. Every depth-4 boundary node is handled as peripheral with a boundary caveat. | Peripheral does not mean safe or unimportant. At depth 4 it primarily reflects missing downstream observation. |
+### Windows PowerShell
 
-`role_score` is a bounded `[0,1]` strength score derived from the metrics in the matched rule. It is not a probability of wrongdoing.
+1. Установите зависимости:
 
-## Priority ranking
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+Set-Location frontend
+npm.cmd ci
+Set-Location ..
+```
 
-`priority_score` is an interpretable weighted sum in `[0,1]`, not a black-box model:
+Если команда `python` недоступна, но установлен Python Launcher, используйте `py -m venv .venv` в первой строке. Активация окружения не требуется.
 
-| Component | Weight | Implemented signal |
-|---|---:|---|
-| Role strength | `0.25` | Strength of the matched role rule. |
-| Money significance | `0.27` | Empirical percentile of total observed incoming plus outgoing KZT. |
-| Structural importance | `0.15` | Combined percentile score: `0.35` PageRank, `0.35` betweenness, and `0.30` total degree. |
-| Seed connectivity | `0.17` | `0.65` seed-ancestor reach, saturated at `10` seeds, plus `0.35` proximity to depth 0. |
-| Anomaly evidence | `0.16` | `0.40` fast-forward ratio, `0.30` flow-imbalance percentile, and `0.30` transaction-count percentile. |
+2. Рассчитайте результаты и запустите backend:
 
-The structural weight is deliberately limited because coordinator role strength already contains structural evidence. No single metric such as PageRank determines the queue.
+```powershell
+.\.venv\Scripts\python.exe backend\pipeline.py
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload
+```
 
-Evidence strings summarize the observed numbers behind each hypothesis in fewer than 200 characters. Cluster hypotheses and all UI wording remain investigation-oriented.
+3. В **другом терминале**, также из корня проекта, запустите frontend:
 
-## Observability and responsible interpretation
+```powershell
+Set-Location frontend
+npm.cmd run dev
+```
 
-The source extract is a bounded view of activity:
+### Linux / macOS
 
-- Outgoing traversal is observed only through depth `3`; depth `4` is the traversal boundary.
-- A depth-4 node with observed out-degree zero is **not** evidence of terminal behavior. Its downstream activity is unobserved and it receives a boundary warning.
-- Seed incoming flow is incomplete because traversal begins from seed outgoing activity. Seed rules do not use observed incoming KZT, pass-through, retention, or fast-forward measures; seed coordinator detection uses outgoing degree plus graph centrality.
-- Only outgoing traversal visible within the supplied intra-bank graph is observed. External-bank and otherwise unobserved activity is outside the dataset.
-- Transfers below `5,000 KZT` are absent from the supplied extract.
-- Findings are investigation hypotheses for analyst review, never determinations of guilt, criminal status, ownership, or intent.
+1. Установите зависимости и рассчитайте результаты:
 
-## Prerequisites
-
-- Python 3.9 or newer
-- Node.js 20 or newer with npm
-- `make`
-
-The repository includes the required organizer parquet files and frontend lockfile. From the repository root, create an isolated Python environment and install exact frontend lockfile dependencies:
-
-```sh
+```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r backend/requirements.txt
 cd frontend
 npm ci
 cd ..
+.venv/bin/python backend/pipeline.py
 ```
 
-`make install-backend` and `make install-frontend` are convenience targets. The explicit commands above make the isolated environment and lockfile use clear.
+2. Запустите backend:
 
-## Run the deterministic analysis
-
-From the repository root:
-
-```sh
-make analyze
+```bash
+.venv/bin/python -m uvicorn backend.app.main:app --reload
 ```
 
-This command reads `data/nodes.parquet`, `data/edges.parquet`, and `data/transactions.parquet`, then regenerates exactly these required findings:
+3. В другом терминале из корня проекта запустите frontend:
 
-- `output/nodes_roles.csv` — one row per GID with `gid`, `role`, `role_score`, `cluster_id`, `priority_score`, and `evidence`.
-- `output/clusters.csv` — one row per cluster with node count, seed count, internal observed KZT, important GIDs, and a cautious hypothesis.
-- `output/top_nodes.csv` — the ranked investigation queue with at least 20 nodes and a short explanation for each.
-
-The pipeline validates the schemas, exactly 2,248 unique node rows, complete required fields, allowed roles, bounded scores, cluster coverage, evidence length, and ranking order before replacing the CSVs.
-
-## Start the application
-
-Start the backend and frontend in separate terminals from the repository root:
-
-```sh
-make backend
+```bash
+cd frontend
+npm run dev
 ```
 
-```sh
-make frontend
-```
+После установки зависимостей, если установлен GNU Make, доступны сокращения `make analyze`, `make backend`, `make frontend` на Windows и Linux/macOS. Makefile выбирает путь к Python в зависимости от ОС. Без Make используйте явные команды выше.
 
-Open `http://localhost:3000`. Interactive API documentation is at `http://127.0.0.1:8000/docs`; health is at `http://127.0.0.1:8000/health`.
+Откройте [интерфейс](http://localhost:3000), [Swagger API](http://127.0.0.1:8000/docs) или [проверку backend](http://127.0.0.1:8000/health). Дождитесь сообщения Uvicorn об успешном завершении запуска. Для остановки нажмите `Ctrl+C` в каждом терминале.
 
-The read-only API exposes:
+### Настройка API и AI
 
-- `GET /api/summary`
-- `GET /api/priorities`
-- `GET /api/nodes/{gid}`
-- `GET /api/nodes/{gid}/graph`
-- `GET /api/clusters`
-- `GET /api/clusters/{cluster_id}`
-- `POST /api/investigator` when the optional AI integration is configured
+Для обычного запуска `.env` и ключи не нужны. Frontend обращается к `http://localhost:8000` по умолчанию.
 
-GIDs are serialized as strings so full int64 identifiers remain exact in JavaScript.
-
-## Environment and optional OpenAI investigator
-
-The deterministic pipeline, API, and workspace work without an API key. To configure local environment values, copy the secret-free template:
-
-```sh
-cp .env.example .env
-```
-
-The backend loads the repository-root `.env`. Set `OPENAI_API_KEY` only when the optional investigator is wanted, and optionally override `OPENAI_MODEL`. The default model is recorded in `.env.example`. `NEXT_PUBLIC_API_BASE_URL` controls the browser's API URL.
+Для AI создайте **в корне репозитория** файл `.env` с собственным ключом:
 
 ```dotenv
-OPENAI_API_KEY=<your-api-key>
+OPENAI_API_KEY=your-api-key
 OPENAI_MODEL=gpt-4.1-mini
+```
+
+Перезапустите backend. Ключ доступен только серверу; `.env` исключён из Git. Без ключа AI endpoint возвращает HTTP 503 с пояснением, остальные функции доступны.
+
+Если нужен другой адрес backend, задайте его отдельно в **`frontend/.env.local`** и перезапустите frontend:
+
+```dotenv
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
 
-`.env` is gitignored. The OpenAI key is backend-only and must never use a `NEXT_PUBLIC_` name. When the key is absent, `/api/investigator` returns a clear unavailable response while every mandatory deterministic feature remains available.
+Next.js не загружает корневой `.env` этого репозитория как конфигурацию frontend. Переменные `MONEYGRAPH_*` из `.env.example` сейчас не подключены к выбору путей. Pipeline принимает параметры `--data`, `--config`, `--out`; API использует стандартные `data/`, `config/thresholds.yaml`, `output/`.
 
-The investigator uses the OpenAI Responses API and a maximum of five calls to six read-only tools: node card, common receivers, bounded paths, node filtering, cluster summary, and removal impact. Tool results are the source of truth for GIDs, paths, roles, scores, amounts, and other graph facts. Answers preserve depth-4 and seed-inflow caveats and remain hypotheses for human review.
+### Частые проблемы запуска
 
-## Repeatable judge demo
+- `npm` не найден: установите Node.js с npm и откройте новый терминал.
+- `ENOENT ... package.json`: запускайте npm внутри `frontend/`, а не в корне.
+- `-m` не распознано: перед ним должно быть имя Python, как в командах выше.
+- `No module named scipy`: повторите установку `backend/requirements.txt` через Python из `.venv`.
+- Backend сообщает об устаревших CSV: снова выполните pipeline и перезапустите backend.
+- Frontend выбрал порт 3001: освободите порт 3000 для этого приложения. CORS backend по умолчанию разрешает только `localhost:3000` и `127.0.0.1:3000`; другие адреса требуют изменения настройки CORS.
 
-1. Regenerate the findings with `make analyze` and inspect the three files in `output/`.
-2. Start `make backend` and `make frontend` in separate terminals.
-3. Open the first row in the priority queue and review its role, priority components, evidence, and bounded directed ego graph.
-4. Search any exact GID to load a node outside the top queue.
-5. Search depth-4 GID `100000000404740100` and confirm the visible observability warning.
-6. Click a neighboring graph node and confirm that its investigation card and ego graph load.
-7. If the backend has `OPENAI_API_KEY`, ask: `Why is GID 100000004156082100 high priority?` and inspect the factual tool activity log.
+## Как проверить решение: сценарий для жюри
 
-## Scaling beyond the hackathon dataset
+1. Выполните pipeline командой для своей ОС. Для включённого набора и текущих правил ожидаются **2 248 строк клиентов, 91 кластер и 20 строк приоритетов**. Pipeline сам проверяет полноту, диапазоны оценок, длину объяснений и сортировку рейтинга.
+2. Проверьте три файла в `output/`: `nodes_roles.csv`, `clusters.csv`, `top_nodes.csv`. Распределение ролей: 91 coordinator, 70 distributor, 83 consolidator, 77 transit, 335 terminal, 1 592 peripheral.
+3. Запустите оба сервера. Откройте `/health`: ожидается `{"status":"ok"}`. В `/api/summary` проверьте 2 248 клиентов, 3 119 связей, 4 840 транзакций и 81 seed.
+4. Откройте [MoneyGraph](http://localhost:3000). Проверьте переключение между русским, казахским и английским. В очереди приоритетов (`Priority nodes` на английском) выберите первую строку: GID **`100000004156082100`**, роль `coordinator`, приоритет примерно **0,901633**. Изучите компоненты рейтинга, объяснение, входящие и исходящие связи.
+5. Нажмите соседний узел на графе: карточка и окружение должны переключиться на него. Проверьте контекст кластера в карточке.
+6. Найдите точный GID **`100000000404740100`**. Это узел глубины 4: ожидаются роль `peripheral` и предупреждение о неполноте исходящих наблюдений. Нулевой наблюдаемый исходящий поток не делает его конечным получателем.
+7. Опционально, с ключом OpenAI, задайте `Почему у GID 100000004156082100 высокий приоритет?`. Проверьте журнал вызванных инструментов и сопоставьте ответ с карточкой клиента. Переключите язык, проверьте перевод примеров вопросов и отправьте новый запрос: AI получает инструкцию отвечать на выбранном языке. Формулировка AI-ответа может меняться.
 
-The current implementation is intentionally optimized for a convincing, explainable prototype on 2,248 nodes. For materially larger datasets, realistic changes would include:
+Основной сценарий доступен без OpenAI. Результаты анализа воспроизводятся при одинаковых данных, правилах и версиях библиотек; backend-зависимости не закреплены до точных версий.
 
-- replace in-memory pandas ingestion and joins with Polars or DuckDB;
-- replace NetworkX with igraph, graph-tool, Neo4j Graph Data Science, or cuGraph where their operating model fits;
-- use approximate or sampled betweenness instead of exact all-node betweenness;
-- partition inputs and incrementally recompute affected features, communities, and cached API snapshots;
-- continue serving bounded ego networks to the browser instead of rendering the full graph;
-- precompute or index bounded path and neighborhood queries for interactive latency.
+## Данные и интеграции
 
-These scaling changes are not implemented in this repository.
+| Источник / результат | Содержание |
+|---|---|
+| `data/nodes.parquet` | 2 248 клиентов с GID, глубиной обхода и признаком seed; 81 seed, 444 узла на границе глубины 4 |
+| `data/edges.parquet` | 3 119 направленных связей: отправитель, получатель, сумма KZT и число переводов |
+| `data/transactions.parquet` | 4 840 транзакций с датой и суммой |
+| `output/nodes_roles.csv` | `gid`, `role`, `role_score`, `cluster_id`, `priority_score`, `evidence` |
+| `output/clusters.csv` | Размеры кластеров, число seed, внутренний объём, ключевые GID и гипотеза |
+| `output/top_nodes.csv` | Место в очереди, GID, роль, приоритет и причина проверки |
 
-## Repository layout
+Входные файлы предоставлены организатором; это ограниченная обезличенная выгрузка, а не подключение к банковской системе в реальном времени. Внешние реестры, KYC и данные других банков не подключены.
 
-```text
-backend/
-  app/analysis/       deterministic features, roles, clustering, ranking, evidence
-  app/api/            cached repository, response models, read-only routes
-  app/agent/          bounded OpenAI loop and grounded graph tools
-  pipeline.py         end-to-end analysis and output validation
-config/
-  thresholds.yaml     implemented rules, weights, clustering, observability settings
-data/                  organizer parquet inputs
-output/                generated required CSV findings
-frontend/              Next.js TypeScript investigation workspace
-starter/               organizer-provided loader and graph builder
-docs/
-  architecture.md     architecture diagram and layer responsibilities
-```
+Единственная опциональная внешняя интеграция — OpenAI. При её использовании сервер отправляет вопрос и результаты вызванных инструментов, включая GID и показатели графа. Доступны `node_card`, `common_receivers`, `paths`, `filter_nodes`, `cluster_summary`, `what_if_remove`, максимум пять вызовов на вопрос. Последний инструмент моделирует удаление узлов из графа; он не блокирует реальные операции.
+
+## Ограничения текущей версии
+
+- Наблюдаются внутрибанковские переводы из предоставленной выгрузки; переводы меньше 5 000 KZT отсутствуют. Исходящий обход ограничен глубиной 3, глубина 4 — граница. Входящие потоки seed неполны.
+- Даты имеют точность до дня. Быстрое перенаправление — временной признак, а не доказательство движения тех же денег или порядка операций внутри дня.
+- Пороги настроены под набор хакатона. Проверка pipeline явно ожидает 2 248 клиентов; для другого набора потребуется адаптация. Расчёты выполняются в памяти, масштабирование на миллионы узлов не проверялось.
+- Louvain использует неориентированную проекцию с суммированием встречных объёмов, `resolution=1.0`, `seed=42`. Направления сохраняются в остальных расчётах и отображении графа.
+- Нет базы данных, авторизации, загрузки файлов через UI, потокового обновления, журнала решений аналитика и сохранения расследований. Интерфейс ориентирован на настольный экран. Машинные коды ролей и полей API/CSV сохраняются на английском независимо от языка интерфейса.
+- Обучаемая модель, прогноз недостающих переводов и полноценный временной анализ расследования не реализованы. Архитектурные идеи не следует считать готовыми функциями.
+- AI может ошибаться. Код проверяет упомянутые 18-значные GID по результатам инструментов, но не выполняет полную автоматическую проверку всех утверждений и чисел. Ответы следует сверять с данными.
+- Это демонстрационный аналитический прототип; оценки обозначают приоритет ручной проверки, а не доказанную противоправную деятельность.
+
+## Deployed-версия
+
+Публичная ссылка на развёрнутую версию в репозитории не указана. Для демонстрации используйте локальный запуск: [http://localhost:3000](http://localhost:3000). Это локальный адрес, доступный после запуска приложения на вашем компьютере.

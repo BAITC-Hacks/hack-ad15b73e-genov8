@@ -22,6 +22,7 @@ from backend.app.api.models import (
     SummaryResponse,
 )
 from backend.app.api.repository import MoneyGraphRepository, get_repository
+from backend.app.agent.localization import message
 
 
 router = APIRouter(prefix="/api")
@@ -100,10 +101,7 @@ def investigate(
     if not api_key:
         unavailable = InvestigatorResponse(
             status="unavailable",
-            answer=(
-                "AI investigator is not configured. Set OPENAI_API_KEY on the backend; "
-                "deterministic MoneyGraph analysis remains available."
-            ),
+            answer=message("unavailable", request.locale),
             referenced_gids=[],
             tool_calls=[],
         )
@@ -115,9 +113,9 @@ def investigate(
             repository=repository,
             api_key=api_key,
             model=model,
-        ).ask(request.question)
+        ).ask(request.question, locale=request.locale, selected_gid=request.selected_gid)
     except InvestigatorError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
+            detail=message("failed", request.locale),
         ) from exc

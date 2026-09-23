@@ -2,7 +2,11 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
+import { LanguageSwitcher, useLanguage } from "@/components/language-provider";
+import type { MessageKey } from "@/lib/translations";
+
 import { InvestigatorPanel } from "@/components/investigator-panel";
+
 import { MoneyGraph, roleColors } from "@/components/money-graph";
 import {
   ApiError,
@@ -16,32 +20,12 @@ import {
   type SummaryResponse,
 } from "@/lib/api";
 
-function compactKzt(value: number): string {
-  const amount = new Intl.NumberFormat("en", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
-  return `${amount} ₸`;
-}
-
-function transactionLabel(count: number): string {
-  return `${count.toLocaleString("en")} ${count === 1 ? "transaction" : "transactions"}`;
-}
-
-function percent(value: number | null, digits = 0): string {
-  if (value === null) return "Not available";
-  return `${(value * 100).toFixed(digits)}%`;
-}
-
-function roleLabel(role: Role): string {
-  return role.charAt(0).toUpperCase() + role.slice(1);
-}
-
 function RoleBadge({ role }: { role: Role }) {
+  const { t } = useLanguage();
   return (
     <span className={`role-badge role-${role}`}>
       <span style={{ backgroundColor: roleColors[role] }} />
-      {roleLabel(role)}
+      {t(role)}
     </span>
   );
 }
@@ -56,6 +40,7 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
 }
 
 function SignalBar({ label, value }: { label: string; value: number }) {
+  const { percent } = useLanguage();
   return (
     <div className="signal-row">
       <div className="signal-label">
@@ -78,6 +63,7 @@ function QueueItem({
   selected: boolean;
   onSelect: (gid: string) => void;
 }) {
+  const { percent, evidence } = useLanguage();
   return (
     <button
       type="button"
@@ -92,13 +78,14 @@ function QueueItem({
           <strong>{percent(item.priority_score)}</strong>
         </div>
         <RoleBadge role={item.role} />
-        <p>{item.why}</p>
+        <p>{evidence(item.why)}</p>
       </div>
     </button>
   );
 }
 
 export function InvestigationWorkspace() {
+  const { t, numberLocale, compactKzt, percent, count, evidence } = useLanguage();
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [priorities, setPriorities] = useState<PrioritiesResponse | null>(null);
   const [node, setNode] = useState<NodeDetail | null>(null);
@@ -109,9 +96,9 @@ export function InvestigationWorkspace() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [selectionLoading, setSelectionLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [initialError, setInitialError] = useState<string | null>(null);
-  const [selectionError, setSelectionError] = useState<string | null>(null);
-  const [searchError, setSearchError] = useState<string | null>(null);
+  const [initialError, setInitialError] = useState<MessageKey | null>(null);
+  const [selectionError, setSelectionError] = useState<MessageKey | null>(null);
+  const [searchError, setSearchError] = useState<MessageKey | null>(null);
   const selectionAbort = useRef<AbortController | null>(null);
 
   const selectNode = useCallback(async (gid: string, source: "queue" | "graph" | "search") => {
@@ -137,9 +124,9 @@ export function InvestigationWorkspace() {
       if (source === "search") setSearchGid(nextNode.gid);
     } catch (error) {
       if (controller.signal.aborted) return;
-      const message = error instanceof Error ? error.message : "Unable to load this investigation.";
+      const message = "Unable to load this investigation.";
       if (source === "search" && error instanceof ApiError && error.status === 404) {
-        setSearchError(`No MoneyGraph node found for GID ${gid}.`);
+        setSearchError("Node not found");
       } else {
         setSelectionError(message);
       }
@@ -166,7 +153,7 @@ export function InvestigationWorkspace() {
         }
       } catch (error) {
         if (!controller.signal.aborted) {
-          setInitialError(error instanceof Error ? error.message : "Unable to load MoneyGraph.");
+          setInitialError("Unable to load MoneyGraph.");
         }
       } finally {
         if (!controller.signal.aborted) setInitialLoading(false);
@@ -203,19 +190,22 @@ export function InvestigationWorkspace() {
           </div>
           <div>
             <h1>MoneyGraph</h1>
-            <p>Investigation workspace</p>
+            <p>{t("Investigation workspace")}</p>
           </div>
         </div>
-        <div className="summary-strip" aria-label="Dataset summary">
-          <SummaryMetric label="Nodes" value={summary ? summary.total_nodes.toLocaleString("en") : "—"} />
-          <SummaryMetric label="Observed flow" value={summary ? compactKzt(summary.total_observed_kzt) : "—"} />
-          <SummaryMetric label="Seeds" value={summary ? String(summary.seed_count) : "—"} />
-          <SummaryMetric label="Clusters" value={summary ? String(summary.cluster_count) : "—"} />
-          <SummaryMetric label="Depth-4 boundary" value={summary ? String(summary.depth_4_boundary_count) : "—"} />
+        <div className="summary-strip" aria-label={t("Dataset summary")}>
+          <SummaryMetric label={t("Nodes")} value={summary ? summary.total_nodes.toLocaleString(numberLocale) : "—"} />
+          <SummaryMetric label={t("Observed flow")} value={summary ? compactKzt(summary.total_observed_kzt) : "—"} />
+          <SummaryMetric label={t("Seeds")} value={summary ? String(summary.seed_count) : "—"} />
+          <SummaryMetric label={t("Clusters")} value={summary ? String(summary.cluster_count) : "—"} />
+          <SummaryMetric label={t("Depth-4 boundary")} value={summary ? String(summary.depth_4_boundary_count) : "—"} />
         </div>
+        <div className="topbar-actions">
+          <LanguageSwitcher />
         <div className="snapshot-status">
           <span className={apiUnavailable ? "status-dot status-dot-error" : "status-dot"} />
-          {apiUnavailable ? "API unavailable" : "Deterministic snapshot"}
+          {t(apiUnavailable ? "API unavailable" : "Deterministic snapshot")}
+        </div>
         </div>
       </header>
 
@@ -223,13 +213,13 @@ export function InvestigationWorkspace() {
         <aside className="queue-panel panel-column">
           <div className="panel-heading">
             <div>
-              <span className="eyebrow">Investigation queue</span>
-              <h2>Priority nodes</h2>
+              <span className="eyebrow">{t("Investigation queue")}</span>
+              <h2>{t("Priority nodes")}</h2>
             </div>
             <span className="count-pill">{priorities?.count ?? 0}</span>
           </div>
           <form className="gid-search" onSubmit={submitSearch}>
-            <label htmlFor="gid-search">Exact GID search</label>
+            <label htmlFor="gid-search">{t("Exact GID search")}</label>
             <div className="search-control">
               <input
                 id="gid-search"
@@ -239,14 +229,14 @@ export function InvestigationWorkspace() {
                 onChange={(event) => setSearchGid(event.target.value)}
                 aria-invalid={Boolean(searchError)}
               />
-              <button type="submit" disabled={searchLoading} aria-label="Search GID">
+              <button type="submit" disabled={searchLoading} aria-label={t("Search GID")}>
                 {searchLoading ? <span className="spinner spinner-small" /> : "→"}
               </button>
             </div>
-            {searchError ? <p className="field-error" role="alert">{searchError}</p> : null}
+            {searchError ? <p className="field-error" role="alert">{t(searchError)}</p> : null}
           </form>
           <div className="queue-divider">
-            <span>Ranked by explainable priority</span>
+            <span>{t("Ranked by explainable priority")}</span>
           </div>
           <div className="queue-list">
             {initialLoading
@@ -254,8 +244,8 @@ export function InvestigationWorkspace() {
               : null}
             {initialError ? (
               <div className="inline-state inline-state-error">
-                <strong>Could not load queue</strong>
-                <p>{initialError}</p>
+                <strong>{t("Could not load queue")}</strong>
+                <p>{t(initialError)}</p>
               </div>
             ) : null}
             {priorities?.items.map((item) => (
@@ -272,19 +262,19 @@ export function InvestigationWorkspace() {
         <section className="graph-panel panel-column">
           <div className="graph-header">
             <div>
-              <span className="eyebrow">Observed movement</span>
-              <h2>Money graph</h2>
+              <span className="eyebrow">{t("Observed movement")}</span>
+              <h2>{t("Money graph")}</h2>
             </div>
-            <div className="role-legend" aria-label="Graph role legend">
+            <div className="role-legend" aria-label={t("Graph role legend")}>
               {(["coordinator", "consolidator", "distributor", "transit", "terminal", "peripheral"] as Role[]).map((role) => (
-                <span key={role}><i style={{ backgroundColor: roleColors[role] }} />{role}</span>
+                <span key={role}><i style={{ backgroundColor: roleColors[role] }} />{t(role)}</span>
               ))}
             </div>
           </div>
           <MoneyGraph
             graph={graph}
             loading={selectionLoading || initialLoading}
-            error={selectionError}
+            error={selectionError ? t(selectionError) : null}
             onNodeSelect={(gid) => void selectNode(gid, "graph")}
           />
           <InvestigatorPanel
@@ -296,15 +286,15 @@ export function InvestigationWorkspace() {
         <aside className={`detail-panel panel-column ${selectionLoading ? "panel-updating" : ""}`}>
           <div className="panel-heading detail-heading">
             <div>
-              <span className="eyebrow">Selected entity</span>
-              <h2>Investigation</h2>
+              <span className="eyebrow">{t("Selected entity")}</span>
+              <h2>{t("Investigation")}</h2>
             </div>
-            {node ? <span className="depth-pill">Depth {node.depth}</span> : null}
+            {node ? <span className="depth-pill">{t("Depth")} {node.depth}</span> : null}
           </div>
           {!node && !selectionLoading ? (
             <div className="inline-state">
-              <strong>No node selected</strong>
-              <p>Select a queue row or search an exact GID.</p>
+              <strong>{t("No node selected")}</strong>
+              <p>{t("Select a queue row or search an exact GID.")}</p>
             </div>
           ) : null}
           {node ? (
@@ -312,69 +302,69 @@ export function InvestigationWorkspace() {
               <section className="entity-card">
                 <div className="entity-topline">
                   <RoleBadge role={node.role} />
-                  <span className="seed-label">{node.is_seed ? "Seed node" : "Non-seed"}</span>
+                  <span className="seed-label">{t(node.is_seed ? "Seed node" : "Non-seed")}</span>
                 </div>
                 <code className="entity-gid">{node.gid}</code>
                 <div className="score-pair">
-                  <div><span>Priority</span><strong>{percent(node.priority_score, 1)}</strong></div>
-                  <div><span>Role confidence</span><strong>{percent(node.role_score, 1)}</strong></div>
+                  <div><span>{t("Priority")}</span><strong>{percent(node.priority_score, 1)}</strong></div>
+                  <div><span>{t("Role confidence")}</span><strong>{percent(node.role_score, 1)}</strong></div>
                 </div>
               </section>
 
               {node.observability.warning ? (
                 <section className="warning-card" role="note">
                   <span>!</span>
-                  <div><strong>Observability limitation</strong><p>{node.observability.warning}</p></div>
+                  <div><strong>{t("Observability limitation")}</strong><p>{evidence(node.observability.warning)}</p></div>
                 </section>
               ) : null}
 
               <section className="detail-section">
-                <div className="section-title"><span>Investigation hypothesis</span></div>
-                <p className="evidence-text">{node.evidence}</p>
+                <div className="section-title"><span>{t("Investigation hypothesis")}</span></div>
+                <p className="evidence-text">{evidence(node.evidence)}</p>
               </section>
 
               <section className="detail-section">
-                <div className="section-title"><span>Observed flow</span></div>
+                <div className="section-title"><span>{t("Observed flow")}</span></div>
                 <div className="metric-grid">
-                  <div><span>Incoming</span><strong>{compactKzt(node.metrics.incoming_kzt)}</strong><small>{transactionLabel(node.metrics.incoming_transaction_count)}</small></div>
-                  <div><span>Outgoing</span><strong>{compactKzt(node.metrics.outgoing_kzt)}</strong><small>{transactionLabel(node.metrics.outgoing_transaction_count)}</small></div>
-                  <div><span>Unique senders</span><strong>{node.metrics.unique_senders}</strong><small>observed counterparties</small></div>
-                  <div><span>Unique recipients</span><strong>{node.metrics.unique_recipients}</strong><small>observed counterparties</small></div>
+                  <div><span>{t("Incoming")}</span><strong>{compactKzt(node.metrics.incoming_kzt)}</strong><small>{count(node.metrics.incoming_transaction_count, "transactions")}</small></div>
+                  <div><span>{t("Outgoing")}</span><strong>{compactKzt(node.metrics.outgoing_kzt)}</strong><small>{count(node.metrics.outgoing_transaction_count, "transactions")}</small></div>
+                  <div><span>{t("Unique senders")}</span><strong>{node.metrics.unique_senders}</strong><small>{t("observed counterparties")}</small></div>
+                  <div><span>{t("Unique recipients")}</span><strong>{node.metrics.unique_recipients}</strong><small>{t("observed counterparties")}</small></div>
                 </div>
                 <div className="secondary-metrics">
-                  <span>Pass-through <strong>{percent(node.metrics.pass_through_ratio)}</strong></span>
-                  <span>Near-time flow <strong>{percent(node.metrics.fast_forward_ratio)}</strong></span>
-                  <span>Seed paths <strong>{node.metrics.seed_ancestor_count}</strong></span>
+                  <span>{t("Pass-through")} <strong>{percent(node.metrics.pass_through_ratio)}</strong></span>
+                  <span>{t("Near-time flow")} <strong>{percent(node.metrics.fast_forward_ratio)}</strong></span>
+                  <span>{t("Seed paths")} <strong>{node.metrics.seed_ancestor_count}</strong></span>
                 </div>
               </section>
 
               <section className="detail-section">
-                <div className="section-title"><span>Priority signals</span></div>
+                <div className="section-title"><span>{t("Priority signals")}</span></div>
                 <div className="signals">
-                  <SignalBar label="Role strength" value={node.priority_components.role_strength} />
-                  <SignalBar label="Money significance" value={node.priority_components.money_significance} />
-                  <SignalBar label="Structural importance" value={node.priority_components.structural_importance} />
-                  <SignalBar label="Seed connectivity" value={node.priority_components.seed_connectivity} />
-                  <SignalBar label="Anomaly evidence" value={node.priority_components.anomaly_evidence} />
+                  <SignalBar label={t("Role strength")} value={node.priority_components.role_strength} />
+                  <SignalBar label={t("Money significance")} value={node.priority_components.money_significance} />
+                  <SignalBar label={t("Structural importance")} value={node.priority_components.structural_importance} />
+                  <SignalBar label={t("Seed connectivity")} value={node.priority_components.seed_connectivity} />
+                  <SignalBar label={t("Anomaly evidence")} value={node.priority_components.anomaly_evidence} />
                 </div>
                 <div className="technical-signals">
                   <span>PageRank <strong>{node.metrics.pagerank.toExponential(2)}</strong></span>
-                  <span>Betweenness <strong>{node.metrics.betweenness.toExponential(2)}</strong></span>
+                  <span>{t("Betweenness")} <strong>{node.metrics.betweenness.toExponential(2)}</strong></span>
                 </div>
               </section>
 
               {cluster ? (
                 <section className="cluster-card">
                   <div className="cluster-title">
-                    <div><span>Cluster context</span><strong>Cluster {cluster.cluster_id}</strong></div>
-                    <span className="cluster-size">{cluster.n_nodes} nodes</span>
+                    <div><span>{t("Cluster context")}</span><strong>{t("Cluster")} {cluster.cluster_id}</strong></div>
+                    <span className="cluster-size">{count(cluster.n_nodes, "nodes")}</span>
                   </div>
                   <div className="cluster-stats">
-                    <div><span>Internal flow</span><strong>{compactKzt(cluster.sum_kzt_internal)}</strong></div>
-                    <div><span>Seed nodes</span><strong>{cluster.n_seed}</strong></div>
+                    <div><span>{t("Internal flow")}</span><strong>{compactKzt(cluster.sum_kzt_internal)}</strong></div>
+                    <div><span>{t("Seed nodes")}</span><strong>{cluster.n_seed}</strong></div>
                   </div>
-                  <p>{cluster.hypothesis}</p>
-                  <span className="top-gids-label">Important GIDs</span>
+                  <p>{evidence(cluster.hypothesis)}</p>
+                  <span className="top-gids-label">{t("Important GIDs")}</span>
                   <div className="gid-chips">
                     {cluster.top_gids.map((gid) => (
                       <button type="button" key={gid} onClick={() => void selectNode(gid, "graph")}>{gid}</button>
