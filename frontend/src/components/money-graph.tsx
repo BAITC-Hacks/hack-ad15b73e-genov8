@@ -3,6 +3,8 @@
 import cytoscape, { type Core, type ElementDefinition, type StylesheetJson } from "cytoscape";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useLanguage } from "@/components/language-provider";
+
 import type { EgoGraphResponse, Role } from "@/lib/api";
 
 interface MoneyGraphProps {
@@ -95,14 +97,8 @@ function shortGid(gid: string): string {
   return `…${gid.slice(-6)}`;
 }
 
-function edgeKzt(value: number): string {
-  return `${new Intl.NumberFormat("en", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value)} ₸`;
-}
-
 export function MoneyGraph({ graph, loading, error, onNodeSelect }: MoneyGraphProps) {
+  const { t, compactKzt, count } = useLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const [edgeTooltip, setEdgeTooltip] = useState<EdgeTooltip | null>(null);
@@ -195,40 +191,40 @@ export function MoneyGraph({ graph, loading, error, onNodeSelect }: MoneyGraphPr
 
   return (
     <div className="graph-stage">
-      <div ref={containerRef} className="graph-canvas" aria-label="Directed ego money graph" />
+      <div ref={containerRef} className="graph-canvas" aria-label={t("Directed ego money graph")} />
       {edgeTooltip ? (
         <div className="edge-tooltip" style={{ left: edgeTooltip.x, top: edgeTooltip.y }}>
-          <strong>{edgeKzt(edgeTooltip.sumKzt)}</strong>
-          <span>{edgeTooltip.transactionCount.toLocaleString("en")} {edgeTooltip.transactionCount === 1 ? "transaction" : "transactions"}</span>
+          <strong>{compactKzt(edgeTooltip.sumKzt)}</strong>
+          <span>{count(edgeTooltip.transactionCount, "transactions")}</span>
         </div>
       ) : null}
       {!graph && !loading && !error ? (
         <div className="graph-state">
           <span className="state-icon">◎</span>
-          <strong>Select an investigation</strong>
-          <p>Choose a priority or search an exact GID to load its observed network.</p>
+          <strong>{t("Select an investigation")}</strong>
+          <p>{t("Choose a priority or search an exact GID to load its observed network.")}</p>
         </div>
       ) : null}
       {loading ? (
         <div className="graph-state graph-state-loading">
           <span className="spinner" />
-          <strong>Loading observed network</strong>
+          <strong>{t("Loading observed network")}</strong>
         </div>
       ) : null}
       {error ? (
         <div className="graph-state graph-state-error">
           <span className="state-icon">!</span>
-          <strong>Network unavailable</strong>
+          <strong>{t("Network unavailable")}</strong>
           <p>{error}</p>
         </div>
       ) : null}
       {graph ? (
         <div className="graph-status">
-          <span>{graph.displayed_neighbor_count} nearby nodes</span>
-          {graph.truncated ? <span className="graph-limit">bounded view</span> : null}
+          <span>{count(graph.displayed_neighbor_count, "neighbors")}</span>
+          {graph.truncated ? <span className="graph-limit">{t("bounded view")}</span> : null}
         </div>
       ) : null}
-      <div className="graph-help">Scroll to zoom · drag to pan · hover an edge for flow · click a node to investigate</div>
+      <div className="graph-help">{t("Scroll to zoom · drag to pan · hover an edge for flow · click a node to investigate")}</div>
     </div>
   );
 }

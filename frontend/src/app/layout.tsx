@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { LanguageProvider } from "@/components/language-provider";
 
 export const metadata: Metadata = {
-  title: "MoneyGraph | Investigation Workspace",
-  description: "Explainable AML network investigation workspace for HackAlem.",
+  title: "MoneyGraph",
+  description: "Анализ графа переводов и объяснимые гипотезы расследования MoneyGraph.",
 };
 
 export default function RootLayout({
@@ -12,8 +13,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="ru">
+      <body><LanguageProvider>{children}</LanguageProvider></body>
     </html>
   );
 }
