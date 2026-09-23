@@ -1,46 +1,45 @@
 # HackAlem MoneyGraph
 
-This repository contains the initial project structure for the HackAlem MoneyGraph solution.
-It is set up for a Python deterministic graph-analysis pipeline, a FastAPI API
-layer, a Next.js TypeScript frontend, documented threshold configuration, input
-data, generated outputs, and project documentation.
+This repository contains the HackAlem MoneyGraph solution. Milestone 2 provides
+a deterministic batch pipeline that reads the organizer parquet files, computes
+node features, assigns explainable roles, detects graph communities, ranks nodes,
+and writes the three required CSV files.
 
-Analysis logic is TODO. The backend does not yet ingest parquet files, compute
-features, assign roles, cluster transactions, rank findings, generate evidence,
-or write hackathon CSV outputs.
+The frontend and FastAPI scaffold remain unchanged. API endpoints, an AI
+assistant, persistence, deployment, and interactive visualization are future
+milestones.
 
-## Structure
+## Analysis pipeline
 
-- `backend/` contains the future Python pipeline and FastAPI application.
-- `frontend/` contains a minimal Next.js TypeScript application.
-- `config/thresholds.yaml` contains documented placeholder sections for role
-  thresholds.
-- `data/` is reserved for real organizer-provided parquet files.
-- `output/` is reserved for generated CSV outputs.
-- `docs/architecture.md` describes the current project structure.
-
-## Development
-
-Install dependencies:
+Install the backend dependencies in an isolated environment:
 
 ```sh
-make install
+make install-backend
 ```
 
-Run the placeholder pipeline:
+Regenerate all required outputs from `data/*.parquet`:
 
 ```sh
 make analyze
 ```
 
-Start the FastAPI app:
+The pipeline writes only:
 
-```sh
-make backend
-```
+- `output/nodes_roles.csv`
+- `output/clusters.csv`
+- `output/top_nodes.csv`
 
-Start the frontend:
+Role thresholds, clustering parameters and ranking weights are documented in
+`config/thresholds.yaml`. The rules treat seed inflow as incomplete and treat
+depth 4 as an unobserved downstream boundary.
 
-```sh
-make frontend
-```
+## Structure
+
+- `backend/app/analysis/` contains feature, role, clustering, ranking and evidence logic.
+- `backend/pipeline.py` runs and validates the complete batch pipeline.
+- `frontend/` contains the minimal Next.js TypeScript scaffold.
+- `config/thresholds.yaml` records the explainable analysis settings.
+- `data/` contains organizer-provided parquet inputs.
+- `output/` contains generated hackathon CSV outputs.
+- `starter/` contains the organizer-provided reference loader and graph builder.
+- `docs/architecture.md` describes the current data flow and limitations.

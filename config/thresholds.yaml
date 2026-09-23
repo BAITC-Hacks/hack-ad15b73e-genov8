@@ -1,42 +1,58 @@
-# MoneyGraph role thresholds
-#
-# Placeholder configuration for explainable, deterministic role assignment.
-# Numeric thresholds remain null until they are derived from the real parquet
-# dataset and documented with the final methodology.
+# Thresholds derived from the 2,248-node organizer dataset.
+# Degree cutoffs follow the observed tails: in-degree 3 is the 95th percentile,
+# out-degree 3 is the 90th percentile, and out-degree 5 is the 95th percentile.
 
 coordinator:
-  min_controlled_counterparties: null
-  min_coordinated_flow_volume: null
-  max_allowed_observed_depth: null
+  min_in_degree: 3
+  min_out_degree: 3
+  min_total_degree: 8
+  min_structural_score: 0.90  # combined PageRank, betweenness and degree percentile score
+  seed_min_out_degree: 8      # seed inflow is incomplete, so seeds use outgoing structure only
 
 distributor:
-  min_outgoing_counterparties: null
-  min_outgoing_volume_share: null
-  max_incoming_concentration: null
+  min_out_degree: 5           # observed 95th-percentile unique-recipient count
 
 consolidator:
-  min_incoming_counterparties: null
-  min_incoming_volume_share: null
-  max_outgoing_concentration: null
+  min_in_degree: 3            # observed 95th-percentile unique-sender count
+  max_out_degree: 2
+  min_incoming_kzt: 100000    # above the KZT 50k median; excludes trivial receipts
 
 transit:
-  min_incoming_counterparties: null
-  min_outgoing_counterparties: null
-  min_pass_through_volume_share: null
-  max_holding_time: null
+  min_pass_through_ratio: 0.50
+  max_pass_through_ratio: 1.50
+  min_fast_forward_ratio: 0.50
+  fast_forward_window_days: 2 # dates have day resolution; same-day order is not inferred
 
 terminal:
-  min_incoming_volume: null
-  max_outgoing_volume_share: null
-  max_downstream_counterparties: null
+  min_incoming_kzt: 100000
+  min_retained_kzt: 100000
+  min_retained_share: 0.80
+  max_out_degree: 1
 
 peripheral:
-  max_total_degree: null
-  max_transaction_volume: null
-  max_cluster_centrality: null
+  fallback: true              # used when no higher-information role rule matches
 
 observability:
-  # Data is observable through depth 3; depth 4 is the boundary for inferred
-  # downstream context and should not be treated as fully observed evidence.
   max_observed_depth: 3
-  depth_4_boundary_handling: null
+  boundary_depth: 4
+  depth_4_handling: peripheral_with_boundary_caveat
+  seed_incoming_flow_complete: false
+
+clustering:
+  method: louvain
+  resolution: 1.0
+  random_seed: 42
+  top_gids_per_cluster: 5
+
+ranking:
+  seed_ancestor_saturation: 10
+  top_n: 20
+  # Structural importance is capped at 0.15 because coordinator role strength
+  # already contains structural evidence. The released 0.05 is distributed
+  # across independent money, seed-connectivity and anomaly components.
+  weights:
+    role_strength: 0.25
+    money_significance: 0.27
+    structural_importance: 0.15
+    seed_connectivity: 0.17
+    anomaly_evidence: 0.16

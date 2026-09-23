@@ -1,23 +1,44 @@
-# HackAlem MoneyGraph Architecture
+# MoneyGraph architecture
 
-This repository contains the initial architecture for the HackAlem MoneyGraph solution. It separates
-the deterministic graph-analysis pipeline, the FastAPI API layer, the Next.js
-frontend, configuration, input data, generated outputs, and documentation.
+## Milestone 2 data flow
 
-## Current Shape
+```text
+nodes.parquet + edges.parquet + transactions.parquet
+  -> integrity checks and directed weighted graph
+  -> structural, monetary, temporal and seed-connectivity features
+  -> threshold-based primary role assignment
+  -> deterministic weighted Louvain communities
+  -> five-component priority score
+  -> cautious numeric evidence
+  -> nodes_roles.csv + clusters.csv + top_nodes.csv
+```
 
-- `backend/app/analysis/` contains placeholders for feature extraction, role
-  assignment, clustering, ranking, and evidence generation.
-- `backend/app/main.py` exposes a minimal FastAPI health endpoint.
-- `backend/pipeline.py` is the future command-line entrypoint for reading real
-  parquet files from `data/` and writing required CSV outputs to `output/`.
-- `frontend/` contains a minimal Next.js TypeScript application.
-- `config/thresholds.yaml` documents placeholder threshold sections for future
-  explainable role assignment.
+The pipeline reuses the organizer loader and directed graph builder in
+`starter/starter.py`. The undirected graph is used only for Louvain community
+detection; direction is retained for features and role assignment. Reciprocal
+edge values are summed in the community projection.
 
-## TODO
+## Explainability
 
-- Add organizer-provided parquet files to `data/`.
-- Implement deterministic graph analysis with pandas, pyarrow, and networkx.
-- Add API routes that expose analysis results.
-- Build the frontend workflow around real generated outputs.
+Role assignment follows a fixed precedence: coordinator, distributor,
+consolidator, transit, terminal, then peripheral. All cutoffs are documented in
+`config/thresholds.yaml`. `role_score` measures the strength of the matched rule.
+
+`priority_score` is a bounded weighted sum of role strength, money significance,
+structural importance, seed connectivity and anomaly evidence. PageRank is one
+part of the structural component and cannot dominate the final score.
+
+## Observability limits
+
+Outgoing behavior is observed only through depth 3. Every depth-4 node is
+assigned the cautious peripheral fallback, and its evidence explicitly says
+that downstream behavior is unobserved. It cannot be called terminal from an
+observed zero out-degree.
+
+Seed incoming flow is incomplete. Seed nodes therefore do not use pass-through,
+retention, fast-forward or incoming-fan-in rules. Their coordinator and
+distributor decisions use observed outgoing structure and centrality only.
+
+Transaction dates have daily resolution. The temporal feature measures outgoing
+value on the same day or within two days after the latest observed incoming
+date; it does not infer ordering within a day or prove fund identity.
