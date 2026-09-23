@@ -5,6 +5,8 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { LanguageSwitcher, useLanguage } from "@/components/language-provider";
 import type { MessageKey } from "@/lib/translations";
 
+import { InvestigatorPanel } from "@/components/investigator-panel";
+
 import { MoneyGraph, roleColors } from "@/components/money-graph";
 import {
   ApiError,
@@ -273,6 +275,10 @@ export function InvestigationWorkspace() {
             graph={graph}
             loading={selectionLoading || initialLoading}
             error={selectionError ? t(selectionError) : null}
+            onNodeSelect={(gid) => void selectNode(gid, "graph")}
+          />
+          <InvestigatorPanel
+            selectedGid={selectedGid}
             onNodeSelect={(gid) => void selectNode(gid, "graph")}
           />
         </section>

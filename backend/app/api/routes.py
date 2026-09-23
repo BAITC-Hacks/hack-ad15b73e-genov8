@@ -1,11 +1,22 @@
-"""Read-only MoneyGraph investigation routes."""
+"""MoneyGraph investigation routes."""
+
+import os
+from typing import Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 
+from backend.app.agent.investigator import (
+    DEFAULT_MODEL,
+    InvestigatorError,
+    MoneyGraphInvestigator,
+)
 from backend.app.api.models import (
     ClusterDetailResponse,
     ClustersResponse,
     EgoGraphResponse,
+    InvestigatorRequest,
+    InvestigatorResponse,
     NodeDetailResponse,
     PrioritiesResponse,
     SummaryResponse,
@@ -74,3 +85,39 @@ def cluster_detail(
             detail=f"Unknown MoneyGraph cluster: {cluster_id}",
         )
     return cluster
+
+
+@router.post(
+    "/investigator",
+    response_model=InvestigatorResponse,
+    responses={503: {"model": InvestigatorResponse}},
+)
+def investigate(
+    request: InvestigatorRequest,
+    repository: MoneyGraphRepository = Depends(get_repository),
+) -> Union[InvestigatorResponse, JSONResponse]:
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        unavailable = InvestigatorResponse(
+            status="unavailable",
+            answer=(
+                "AI investigator is not configured. Set OPENAI_API_KEY on the backend; "
+                "deterministic MoneyGraph analysis remains available."
+            ),
+            referenced_gids=[],
+            tool_calls=[],
+        )
+        return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=unavailable.model_dump())
+
+    model = os.getenv("OPENAI_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    try:
+        return MoneyGraphInvestigator(
+            repository=repository,
+            api_key=api_key,
+            model=model,
+        ).ask(request.question)
+    except InvestigatorError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc

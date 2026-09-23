@@ -1,6 +1,6 @@
 """Explicit response models for the read-only MoneyGraph API."""
 
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -151,3 +151,28 @@ class ClusterNode(BaseModel):
 
 class ClusterDetailResponse(ClusterSummary):
     important_nodes: List[ClusterNode]
+
+
+class InvestigatorRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=1000)
+
+
+class ToolCallRecord(BaseModel):
+    name: Literal[
+        "node_card",
+        "common_receivers",
+        "paths",
+        "filter_nodes",
+        "cluster_summary",
+        "what_if_remove",
+    ]
+    arguments: Dict[str, Any]
+    status: Literal["ok", "error"]
+    referenced_gids: List[str]
+
+
+class InvestigatorResponse(BaseModel):
+    status: Literal["ok", "unavailable"]
+    answer: str
+    referenced_gids: List[str]
+    tool_calls: List[ToolCallRecord]
