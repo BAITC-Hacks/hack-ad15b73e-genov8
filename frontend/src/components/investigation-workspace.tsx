@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
+import { InvestigatorPanel } from "@/components/investigator-panel";
 import { MoneyGraph, roleColors } from "@/components/money-graph";
 import {
   ApiError,
@@ -284,6 +285,10 @@ export function InvestigationWorkspace() {
             graph={graph}
             loading={selectionLoading || initialLoading}
             error={selectionError}
+            onNodeSelect={(gid) => void selectNode(gid, "graph")}
+          />
+          <InvestigatorPanel
+            selectedGid={selectedGid}
             onNodeSelect={(gid) => void selectNode(gid, "graph")}
           />
         </section>

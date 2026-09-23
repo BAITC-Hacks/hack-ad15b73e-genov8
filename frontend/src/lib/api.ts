@@ -140,6 +140,28 @@ export interface ClustersResponse {
   items: ClusterSummary[];
 }
 
+export type InvestigatorStatus = "ok" | "unavailable";
+
+export interface ToolCallRecord {
+  name:
+    | "node_card"
+    | "common_receivers"
+    | "paths"
+    | "filter_nodes"
+    | "cluster_summary"
+    | "what_if_remove";
+  arguments: Record<string, unknown>;
+  status: "ok" | "error";
+  referenced_gids: string[];
+}
+
+export interface InvestigatorResponse {
+  status: InvestigatorStatus;
+  answer: string;
+  referenced_gids: string[];
+  tool_calls: ToolCallRecord[];
+}
+
 const configuredBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 const API_BASE_URL = configuredBase.replace(/\/$/, "");
 
@@ -173,6 +195,29 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function investigate(question: string): Promise<InvestigatorResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/investigator`, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ question }),
+  });
+  const body = (await response.json()) as InvestigatorResponse | { detail?: string };
+  if (response.status === 503 && "status" in body && body.status === "unavailable") {
+    return body;
+  }
+  if (!response.ok) {
+    const message = "detail" in body && body.detail
+      ? body.detail
+      : `Request failed with status ${response.status}`;
+    throw new ApiError(message, response.status);
+  }
+  return body as InvestigatorResponse;
+}
+
 export const moneyGraphApi = {
   summary: (signal?: AbortSignal) => request<SummaryResponse>("/api/summary", signal),
   priorities: (signal?: AbortSignal) =>
@@ -184,4 +229,5 @@ export const moneyGraphApi = {
   clusters: (signal?: AbortSignal) => request<ClustersResponse>("/api/clusters", signal),
   cluster: (clusterId: number, signal?: AbortSignal) =>
     request<ClusterDetail>(`/api/clusters/${clusterId}`, signal),
+  investigate,
 };
